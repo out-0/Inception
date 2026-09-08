@@ -1,0 +1,31 @@
+services:
+  nginx:
+    # Docker file to build the image for nginx
+    build: ./requirements/nginx
+    container_name: nginx
+    environment:
+      - DOMAIN_NAME=${DOMAIN_NAME}
+
+    ports:
+      - 443:443
+
+    networks:
+      - inception-net
+    volumes:
+      - ./requirements/nginx/conf.d:/etc/nginx/conf.d
+      - ./requirements/nginx/html:/usr/share/nginx/html
+
+  mangodb:
+    build: ./requirements/mariadb
+    container_name: mariadb
+
+  wordpress:
+    build: ./requirements/wordpress
+    container_name: wordpress
+    environment:
+      - WORDPRESS_DB_HOST=mangodb:3306
+      - WORDPRESS_DB_USER=wordpress
+      - WORDPRESS_DB_PASSWORD=wordpress
+      - WORDPRESS_DB_NAME=wordpress
+    volumes:
+      - ./requirements/wordpress/wp-content:/var/www/html/wp-content
