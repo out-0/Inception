@@ -1,31 +1,33 @@
 services:
-  nginx:
-    # Docker file to build the image for nginx
-    build: ./requirements/nginx
-    container_name: nginx
-    environment:
-      - DOMAIN_NAME=${DOMAIN_NAME}
-
-    ports:
-      - 443:443
-
-    networks:
-      - inception-net
-    volumes:
-      - ./requirements/nginx/conf.d:/etc/nginx/conf.d
-      - ./requirements/nginx/html:/usr/share/nginx/html
-
-  mangodb:
+  mariadb:
     build: ./requirements/mariadb
     container_name: mariadb
-
-  wordpress:
-    build: ./requirements/wordpress
-    container_name: wordpress
     environment:
-      - WORDPRESS_DB_HOST=mangodb:3306
-      - WORDPRESS_DB_USER=wordpress
-      - WORDPRESS_DB_PASSWORD=wordpress
-      - WORDPRESS_DB_NAME=wordpress
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+    secrets:
+      - db_root_password
+      - db_password
     volumes:
-      - ./requirements/wordpress/wp-content:/var/www/html/wp-content
+      - mariadb_data:/var/lib/mysq
+    networks:
+      - inception-net
+    restart: on-failure
+
+secrets:
+  db_root_password:
+    file: ../secrets/db_root_password.txt
+  db_password:
+    file: ../secrets/db_password.txt
+
+volumes:
+  mariadb_data:
+    driver: local # use Docker's built-in local volume driver (default anyway)
+    driver_opts:
+      type: none # not a network filesystem — just a plain local mount
+      device: /home/out/data/mariadb
+      o: bind
+
+networks:
+  inception-net:
+    driver: bridge
