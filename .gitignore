@@ -1,3 +1,5 @@
 .env
 srcs/.env
 .nvim
+secrets
+secrets/*

@@ -4,7 +4,7 @@
 # the nginx.conf file
 
 
-FROM debian:12.14
+FROM debian:bookworm
 
 # Install Needed Packages
 RUN apk update && apk add nginx && \
@@ -14,7 +14,7 @@ RUN apk update && apk add nginx && \
 WORKDIR /the/workdir/path
 
 # Copy the Nginx configuration
-COPY conf/nginx.conf.template /etc/nginx/nginx.conf.template
+COPY conf/nginx.conf /etc/nginx/nginx.conf
 
 
 # Generate a self-signed SSL certificate for the server
