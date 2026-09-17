@@ -1,11 +1,51 @@
-LOGIN = out
+LOGIN       := aarid
+DATA_DIR    := /home/$(LOGIN)/data
+COMPOSE     := docker compose -f srcs/docker-compose.yml
+
+all: up
 
 build:
-	docker compose -f srcs/docker-compose.yml build
+	@echo "Building Docker images..."
+	@$(COMPOSE) build
+
 up:
-	mkdir -p /home/$(LOGIN)/data/mariadb
-	mkdir -p /home/$(LOGIN)/data/wordpress
-	docker compose -f srcs/docker-compose.yml up -d
+	@echo "Creating data persistence directories if they do not exist..."
+	@mkdir -p $(DATA_DIR)/mariadb
+	@mkdir -p $(DATA_DIR)/wordpress
+	@echo "Starting up services..."
+	@$(COMPOSE) up -d --build
 
 down:
-	docker compose -f srcs/docker-compose.yml down
+	@echo "Stopping and removing containers..."
+	@$(COMPOSE) down
+
+stop:
+	@echo "Stopping containers..."
+	@$(COMPOSE) stop
+
+start:
+	@echo "Starting stopped containers..."
+	@$(COMPOSE) start
+
+status:
+	@echo "Checking containers status..."
+	@$(COMPOSE) ps
+
+logs:
+	@echo "Displaying logs..."
+	@$(COMPOSE) logs -f
+
+clean: down
+	@echo "Cleaning up containers and networks..."
+
+fclean: down
+	@echo "Performing deep cleanup (volumes, images, and data directories)..."
+	@docker system prune -af --volumes || true
+	@if [ -d "$(DATA_DIR)" ]; then \
+		echo "Removing $(DATA_DIR)..."; \
+		rm -rf $(DATA_DIR) || sudo rm -rf $(DATA_DIR) || true; \
+	fi
+
+re: fclean all
+
+.PHONY: all build up down stop start status logs clean fclean re
