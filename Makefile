@@ -1,3 +1,5 @@
+# TODO: ALLOW COMMENTS without approve AND USER REGISTERS IN WORDPRESS WEBSITE LATER
+
 LOGIN       := aarid
 DATA_DIR    := /home/$(LOGIN)/data
 COMPOSE     := docker compose -f srcs/docker-compose.yml
@@ -48,4 +50,4 @@ fclean: down
 
 re: fclean all
 
-.PHONY: all build up down stop start status logs clean fclean re
+.PHONY: build up down stop start status logs
