@@ -82,4 +82,5 @@ volumes:
 
 networks:
   inception-net:
+    name: inception-net
     driver: bridge
