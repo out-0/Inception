@@ -1,7 +1,7 @@
 services:
   mariadb:
     build: ./requirements/mariadb
-    image: mariadb
+    image: mariadb:42
     container_name: mariadb
     restart: always
     environment:
@@ -17,7 +17,7 @@ services:
 
   wordpress:
     build: ./requirements/wordpress
-    image: wordpress
+    image: wordpress:42
     container_name: wordpress
     restart: always
     depends_on:
@@ -42,7 +42,7 @@ services:
 
   nginx:
     build: ./requirements/nginx
-    image: nginx
+    image: nginx:42
     container_name: nginx
     restart: always
     depends_on:
