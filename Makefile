@@ -6,6 +6,8 @@ COMPOSE     := docker compose -f srcs/docker-compose.yml
 
 all: up
 
+bonus: all
+
 build:
 	@echo "Building Docker images..."
 	@$(COMPOSE) build
@@ -50,4 +52,4 @@ fclean: down
 
 re: fclean all
 
-.PHONY: build up down stop start status logs
+.PHONY: all bonus build up down stop start status logs clean fclean re

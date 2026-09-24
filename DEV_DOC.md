@@ -1,6 +1,6 @@
 # Developer Documentation (DEV_DOC.md)
 
-This documentation provides engineers and developers with technical details required to install, inspect, maintain, and modify the Inception infrastructure.
+This documentation provides engineers and developers with technical details required to install, inspect, maintain, and modify the Inception infrastructure (Mandatory and Bonus stacks).
 
 ---
 
@@ -15,7 +15,7 @@ This documentation provides engineers and developers with technical details requ
   - `git`
   - `openssl` (for host-level debugging if needed)
 
-### Cloning and Repository Layout
+### Repository Layout
 ```text
 Inception/
 ├── Makefile
@@ -26,7 +26,8 @@ Inception/
 │   ├── db_root_password.txt
 │   ├── db_password.txt
 │   ├── wp_admin_password.txt
-│   └── wp_user_password.txt
+│   ├── wp_user_password.txt
+│   └── ftp_password.txt
 └── srcs/
     ├── .env                  <- Untracked environment variables file
     ├── .env.example          <- Template file for configuration
@@ -41,11 +42,34 @@ Inception/
         │   ├── .dockerignore
         │   ├── conf/nginx.conf
         │   └── tools/entrypoint.sh
-        └── wordpress/
-            ├── Dockerfile
-            ├── .dockerignore
-            ├── conf/www.conf
-            └── tools/wp-setup.sh
+        ├── wordpress/
+        │   ├── Dockerfile
+        │   ├── .dockerignore
+        │   ├── conf/www.conf
+        │   └── tools/wp-setup.sh
+        └── bonus/
+            ├── adminer/
+            │   ├── Dockerfile
+            │   └── .dockerignore
+            ├── cadvisor/
+            │   ├── Dockerfile
+            │   └── .dockerignore
+            ├── ftp/
+            │   ├── Dockerfile
+            │   ├── .dockerignore
+            │   ├── conf/vsftpd.conf
+            │   └── tools/ftp-setup.sh
+            ├── redis/
+            │   ├── Dockerfile
+            │   ├── .dockerignore
+            │   └── conf/redis.conf
+            └── static_site/
+                ├── Dockerfile
+                ├── .dockerignore
+                ├── server.js
+                └── app/
+                    ├── index.html
+                    └── style.css
 ```
 
 ### Configuration & Secret Initialization
@@ -61,6 +85,7 @@ Inception/
    echo "db_user_pass_123"    > secrets/db_password.txt
    echo "wp_admin_pass_123"   > secrets/wp_admin_password.txt
    echo "wp_user_pass_123"    > secrets/wp_user_password.txt
+   echo "ftp_pass_123"        > secrets/ftp_password.txt
    chmod 600 secrets/*.txt
    ```
 3. **Map Domain in `/etc/hosts`**:
@@ -76,7 +101,7 @@ Inception/
 The orchestration is automated using `make` which interacts directly with `docker compose`:
 
 ```bash
-# Build images and start containers in detached mode
+# Build images and start all containers in detached mode
 make
 
 # Explicit rebuild without cache
@@ -86,11 +111,16 @@ docker compose -f srcs/docker-compose.yml build --no-cache
 docker compose -f srcs/docker-compose.yml up
 ```
 
-### Startup Sequence
+### Startup Sequence & Architecture
 1. **Host Directories**: `make` creates `/home/aarid/data/mariadb` and `/home/aarid/data/wordpress` if they do not exist.
 2. **MariaDB**: Boots, reads root and user secrets, performs database bootstrapping with `mariadb-install-db` and `mariadbd --bootstrap`, then runs `exec mariadbd --user=mysql --console` on PID 1.
-3. **WordPress**: Starts, polls `mariadb:3306` until responsive, runs `wp core download`, configures `wp-config.php`, installs WordPress and sets up the second user, sets permissions, and calls `exec php-fpm8.2 -F`.
-4. **NGINX**: Starts, generates self-signed TLS certificates for `aarid.42.fr` if not already present, binds to `0.0.0.0:443`, and executes `exec nginx -g "daemon off;"`.
+3. **Redis**: Boots in-memory data store on port 6379 under PID 1 (`redis-server /etc/redis/redis.conf`).
+4. **WordPress**: Starts, polls `mariadb:3306` until responsive, runs `wp core download`, configures `wp-config.php` (including Redis cache parameters), installs WordPress, enables Redis Object Cache plugin, creates the second user (`evaluator`), and calls `exec php-fpm8.2 -F`.
+5. **FTP Server**: Configures `ftpuser` with password from secrets, sets home to `/var/www/html`, and executes `exec /usr/sbin/vsftpd` on PID 1.
+6. **Static Website**: Starts Node.js static server on port 3000 (`exec node server.js`).
+7. **Adminer**: Starts built-in PHP web server on port 8080 (`exec php -S 0.0.0.0:8080 -t /var/www/html`).
+8. **cAdvisor**: Collects container telemetry on port 8080.
+9. **NGINX**: Generates self-signed TLS certificates for `aarid.42.fr` if not already present, binds to port 443, reverse-proxies `/`, `/portfolio/`, `/adminer`, and `/cadvisor/`, and executes `exec nginx -g "daemon off;"`.
 
 ---
 
@@ -105,7 +135,7 @@ docker compose -f srcs/docker-compose.yml up
 | **Shell Access (WordPress)** | `docker compose -f srcs/docker-compose.yml exec wordpress sh` |
 | **Shell Access (MariaDB)** | `docker compose -f srcs/docker-compose.yml exec mariadb sh` |
 | **Shell Access (NGINX)** | `docker compose -f srcs/docker-compose.yml exec nginx sh` |
-| **Inspect Network Bridge** | `docker network inspect srcs_inception-net` |
+| **Inspect Network Bridge** | `docker network inspect inception-net` |
 | **Inspect Docker Volumes** | `docker volume inspect srcs_mariadb_data srcs_wordpress_data` |
 
 ### Cleanup Routines
@@ -144,7 +174,4 @@ volumes:
 - **MariaDB Relational Data**: `/home/aarid/data/mariadb`
   - Stores all MySQL table data, innodb logs, and system schemas.
 - **WordPress Web Files**: `/home/aarid/data/wordpress`
-  - Contains core WordPress files, `wp-config.php`, plugin installations, themes, and uploaded media (`wp-content/uploads/`).
-
-### Persistence Guarantees
-Because these volumes map directly to directories under `/home/aarid/data/`, restarting containers, running `make down`, or rebooting the host virtual machine will **not** destroy database content or media uploads. The data persists on disk until explicitly erased using `make fclean` or manual `rm -rf`.
+  - Contains core WordPress files, `wp-config.php`, plugin installations, themes, and uploaded media (`wp-content/uploads/`). Shared with FTP container for remote asset manipulation.

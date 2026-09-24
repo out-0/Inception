@@ -9,7 +9,7 @@ if [ ! -f /etc/ssl/certs/inception.crt ] || [ ! -f /etc/ssl/private/inception.ke
         -newkey rsa:2048 \
         -keyout /etc/ssl/private/inception.key \
         -out /etc/ssl/certs/inception.crt \
-        -subj "/C=FR/ST=IDF/L=Paris/O=42/OU=42/CN=${DOMAIN_NAME:-aarid.42.fr}"
+        -subj "/CN=${DOMAIN_NAME:-aarid.42.fr}"
 fi
 
 echo "Starting NGINX in foreground..."
