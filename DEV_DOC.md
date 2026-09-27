@@ -148,6 +148,8 @@ docker compose -f srcs/docker-compose.yml up
   make fclean
   ```
 
+**Warning:** `make fclean` runs `docker system prune -af --volumes` and deletes `/home/aarid/data`, including the MariaDB database and WordPress files. The Docker prune can also remove other unused Docker resources on the host, not just resources from this project. `make re` runs `fclean` before rebuilding, so it also deletes this project data. Back up anything you need before using either command.
+
 ---
 
 ## 4. Data Storage and Persistence

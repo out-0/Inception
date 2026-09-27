@@ -47,8 +47,8 @@ const server = http.createServer((req, res) => {
 			res.end(data);
 		});
 	});
+});
 
-	server.listen(PORT, '0.0.0.0', () => {
-		console.log(`Static site server listening on port ${PORT}...`);
-	})
+server.listen(PORT, '0.0.0.0', () => {
+	console.log(`Static site server listening on port ${PORT}...`);
 });

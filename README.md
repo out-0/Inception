@@ -4,155 +4,171 @@
 
 ## Description
 
-The **Inception** project is a system administration exercise designed to introduce containerization concepts and modern DevOps practices using Docker and Docker Compose. The primary goal is to build a secure, isolated, and multi-container web infrastructure hosted on a dedicated Linux Virtual Machine.
+The **Inception** project is a system administration exercise focused on Docker and service administration. Its goal is to run a small web infrastructure as separate containers, connected through a private Docker network and configured with persistent storage.
 
-The stack is composed of dedicated microservices running in isolated containers built from custom Dockerfiles utilizing `debian:bookworm` (penultimate stable Debian release):
+The required services are built from custom Dockerfiles based on Debian Bookworm. Each container runs one main service.
 
 ### Mandatory Services
-1. **NGINX**: Acts as the sole public gateway to the web infrastructure, exposing exclusively port 443 with TLSv1.2 or TLSv1.3 encryption.
-2. **WordPress + PHP-FPM**: Serves dynamic web content, executing PHP FastCGI requests independently on port 9000 without embedding an NGINX web server.
-3. **MariaDB**: Relational database engine storing all WordPress content, user accounts, and configuration data on internal port 3306.
+
+1. **NGINX**: Accepts web traffic over HTTPS on port 443 and routes requests to the web services. TLS 1.2 and TLS 1.3 are enabled.
+2. **WordPress + PHP-FPM**: Runs the WordPress application. PHP-FPM listens on port 9000 inside the Docker network.
+3. **MariaDB**: Stores WordPress content and configuration in a database on the internal Docker network.
 
 ### Bonus Services
-4. **Redis Cache**: In-memory data store providing object caching for WordPress, drastically reducing database read latency.
-5. **FTP Server (`vsftpd`)**: File Transfer Protocol daemon pointing to the WordPress files volume for secure remote file management.
-6. **Static Website (Portfolio)**: Showcase website for `aarid` built with non-PHP web technologies (HTML5, CSS3, modern JS) and served via a lightweight Node.js engine, reverse-proxied by NGINX at `/portfolio/`.
-7. **Adminer**: Lightweight, single-file database management interface for MariaDB, accessible through NGINX at `/adminer`.
-8. **cAdvisor (Service of Choice)**: Google's container telemetry daemon providing real-time resource usage, CPU, memory, and filesystem metrics across all containers in the stack.
 
----
+4. **Redis**: Provides object caching for WordPress.
+5. **FTP (`vsftpd`)**: Provides file transfer access to the WordPress files. FTP ports are published separately from HTTPS.
+6. **Static site**: A portfolio built with HTML, CSS, and JavaScript, served by Node.js and available at `/portfolio/`.
+7. **Adminer**: Web interface for managing MariaDB, available at `/adminer`.
+8. **cAdvisor**: Displays container resource metrics and is available at `/cadvisor/`.
 
-## Project Description & Architectural Comparisons
+### Project Files
 
-### Docker Usage and Design Choices
-Each service is decoupled according to the single-responsibility principle:
-- No monolithic containers or pre-built service images from Docker Hub are permitted (except official Debian base OS images).
-- Processes run directly under PID 1 using `exec` in shell entrypoints to ensure correct Unix signal forwarding (`SIGTERM`, `SIGINT`) and avoid hacky infinite loop wrappers (`tail -f`, `sleep infinity`).
-- Sensitive data is decoupled from both code and image layers using Docker Secrets and environment configuration files (`.env`).
+- `srcs/docker-compose.yml`: Defines the services, network, secrets, and persistent volumes.
+- `srcs/requirements/mariadb/`, `wordpress/`, and `nginx/`: Dockerfiles, service configuration, and startup scripts for the required services.
+- `srcs/requirements/bonus/`: Dockerfiles and files for Redis, FTP, the static site, Adminer, and cAdvisor.
+- `srcs/.env.example`: Template for non-secret settings. Local `srcs/.env` and the root `secrets/` files provide deployment configuration and passwords.
+- `Makefile`: Short commands to build, start, stop, and inspect the stack.
+
+## Project Description and Docker Design Choices
+
+The services run in separate containers built from this project’s Dockerfiles. The images use Debian Bookworm as their base. Startup scripts use `exec` for the main service process so it receives container signals directly. Non-secret settings are supplied through `srcs/.env`; passwords are supplied as Compose secrets.
 
 ### Architectural Comparisons
 
 #### 1. Virtual Machines vs Docker
-| Feature | Virtual Machines (VMs) | Docker Containers |
+
+| Topic | Virtual Machines | Docker containers |
 | :--- | :--- | :--- |
-| **Architecture** | Emulates complete hardware via a Hypervisor (Type 1 or Type 2). Runs a full guest operating system with its own kernel. | Shares the host Linux kernel and isolates processes via Linux namespaces (`pid`, `net`, `mnt`, `ipc`, `uts`) and control groups (`cgroups`). |
-| **Resource Overhead** | Heavy: high RAM, CPU, and disk storage overhead per instance. | Lightweight: minimal overhead, processes run directly on host kernel. |
-| **Startup Speed** | Minutes (full OS boot sequence). | Milliseconds to seconds (process execution). |
-| **Isolation Level** | Strong hardware-level isolation. | Process-level isolation enforced by kernel namespaces and seccomp profiles. |
-| **Portability** | Heavy image export (multi-gigabyte virtual disks). | Highly portable layered images with immutable specifications (Dockerfiles). |
+| Operating system | Each VM runs a guest operating system on virtual hardware. | Containers share the host kernel while isolating processes and resources. |
+| Resources | A guest OS adds resource overhead. | Usually lighter because containers do not run a separate kernel. |
+| Isolation | Isolation is provided by the hypervisor and guest OS boundary. | Isolation is provided by the container runtime and operating system; it is not the same boundary as a VM. |
+| This project | Would require managing one or more guest systems. | Runs each service in its own container on the Docker network. |
 
 #### 2. Secrets vs Environment Variables
-| Feature | Environment Variables | Docker Secrets |
+
+| Topic | Environment variables | Compose secrets |
 | :--- | :--- | :--- |
-| **Storage & Visibility** | Stored in process memory and inspectable via `docker inspect`, `docker compose config`, or `/proc/$PID/environ`. | Stored in temporary in-memory filesystems (`/run/secrets/`) within the container. |
-| **Image Leak Risk** | High risk if hardcoded in `Dockerfile` or exported in image history layers. | Zero risk: secrets are mounted only at runtime and never baked into images. |
-| **Security Scope** | Best suited for non-confidential configuration (domain names, ports, public flags). | Required for sensitive credentials (database root passwords, user passwords, API keys). |
-| **Lifecycle** | Persists across container restarts and inspect logs. | In-memory only; ceases to exist when container stops. |
+| Intended use | Convenient for non-secret settings such as domain names and database names. | Mounts sensitive values as files under `/run/secrets/` for services that need them. |
+| Exposure | Values can be visible to processes and may appear in configuration or inspection output. | Keeps values out of the service environment and image, but does not by itself guarantee secure storage on the host. |
+| This project | `srcs/.env` configures the domain and service settings. | Root-level files in `secrets/` provide passwords. Compose's file-backed secrets use those host files. |
 
 #### 3. Docker Network vs Host Network
-| Feature | Docker Network (Bridge) | Host Network (`network_mode: host`) |
+
+| Topic | Docker bridge network | Host network |
 | :--- | :--- | :--- |
-| **Network Isolation** | Containers receive private IP addresses within an internal software bridge. Host ports must be explicitly mapped (`ports:`). | Container shares the network namespace and IP stack directly with the host machine. |
-| **Port Collision** | Multiple containers can listen on the same internal port (e.g. MariaDB on 3306, PHP-FPM on 9000) without host collisions. | Containers cannot bind to the same port on the host machine. |
-| **Security** | Isolated: unmapped ports remain inaccessible to outside networks and only visible to containers on the same bridge. | Insecure for multi-tenant services: any open port is exposed on all host network interfaces. |
-| **Subject Compliance** | Mandatory (`inception-net` bridge). | Strictly prohibited (`network: host` is forbidden). |
+| Connectivity | Containers on the bridge can reach one another by service name. | A container shares the host network namespace. |
+| Ports | Services can use the same internal port; `ports` publishes selected ports on the host. | Services bind directly to host ports, so port conflicts are possible. |
+| This project | All services join the `inception-net` bridge. NGINX publishes port 443; FTP publishes port 21 and its passive range. | The stack does not use host networking. |
 
 #### 4. Docker Volumes vs Bind Mounts
-| Feature | Docker Named Volumes | Host Bind Mounts |
+
+| Topic | Docker-managed named volume | Bind mount |
 | :--- | :--- | :--- |
-| **Management** | Fully managed by the Docker daemon (`docker volume create`, `docker volume ls`). | Directly references an arbitrary path on the host filesystem without Docker management. |
-| **Portability** | Abstracted from the host directory structure; easily shared across containers and backup drivers. | Bound to specific host directory paths and dependent on host filesystem structure. |
-| **Subject Implementation** | Configured via Docker named volumes with local driver options (`driver_opts: type=none, o=bind, device=/home/aarid/data/...`). This fulfills both Docker named volume management and data persistence under `/home/aarid/data`. | Disallowed as raw bind mounts (`volumes: - /path/on/host:/path/in/container`). |
+| Host path | Docker chooses and manages the storage location. | The configuration names a specific host path. |
+| Portability | Usually less tied to a particular host directory layout. | Depends on the configured host path existing and having suitable permissions. |
+| This project | Compose declares named volumes, but configures the local driver to use `/home/aarid/data/mariadb` and `/home/aarid/data/wordpress`. These are host-backed paths, so the data remains tied to those locations. | A direct bind mount uses a host path directly in the service's `volumes` entry. |
 
 ---
 
 ## Bonus Services Overview & Justification
 
-1. **Redis Cache (`srcs/requirements/bonus/redis`)**:
-   - High-performance in-memory key-value cache. Connected to WordPress via `WP_REDIS_HOST=redis` and the `redis-cache` plugin with `php8.2-redis`. Significantly accelerates database query resolution by caching object queries in RAM.
-2. **FTP Server (`srcs/requirements/bonus/ftp`)**:
-   - `vsftpd` configured with local user chroot pointing to `/var/www/html`. Operates on port 21 (control) and passive range `21100-21105`. Enables remote file uploads directly to the WordPress installation.
-3. **Static Website (`srcs/requirements/bonus/static_site`)**:
-   - Built completely without PHP using HTML5, CSS3, and JavaScript. Served via a custom native Node.js HTTP server on port 3000 and reverse-proxied by NGINX at `https://aarid.42.fr/portfolio/`.
-4. **Adminer (`srcs/requirements/bonus/adminer`)**:
-   - Full-featured database management web interface contained in a single PHP file. Provides an intuitive web UI to inspect tables, execute SQL queries, and manage MariaDB databases at `https://aarid.42.fr/adminer`.
-5. **cAdvisor — Service of Choice (`srcs/requirements/bonus/cadvisor`)**:
-   - **Justification**: In a production microservice environment, maintaining real-time observability of container resource consumption (CPU throttling, memory leaks, disk I/O, network traffic) is critical for system health and capacity planning. cAdvisor provides continuous real-time telemetry natively without external agents. Reverse-proxied by NGINX at `https://aarid.42.fr/cadvisor/`.
+1. **Redis (`srcs/requirements/bonus/redis`)**: WordPress uses Redis through the Redis Object Cache plugin to cache object data.
+2. **FTP (`srcs/requirements/bonus/ftp`)**: `vsftpd` provides access to the shared WordPress files directory. It uses port 21 and passive ports `21100-21105`.
+3. **Static site (`srcs/requirements/bonus/static_site`)**: A Node.js server serves the portfolio files on the Docker network; NGINX routes `/portfolio/` requests to it.
+4. **Adminer (`srcs/requirements/bonus/adminer`)**: A web interface for connecting to and managing MariaDB through the Docker network.
+5. **cAdvisor (`srcs/requirements/bonus/cadvisor`)**: Collects and displays resource metrics for the containers. It is available through NGINX at `/cadvisor/`.
 
 ---
 
 ## Instructions
 
-### 1. Prerequisites
-- Linux Virtual Machine with Docker and Docker Compose installed.
-- Administrative privileges (`sudo`) to create directory paths and update `/etc/hosts`.
+### Requirements
 
-### 2. Domain Name Setup
-Map `aarid.42.fr` to your local host IP address in `/etc/hosts`:
-```bash
-sudo sed -i '1s/^/127.0.0.1 aarid.42.fr\n/' /etc/hosts
-```
-Or manually edit `/etc/hosts` to include:
-```text
-127.0.0.1 aarid.42.fr
-```
+- Docker Engine with the Docker Compose plugin
+- GNU Make
+- A Linux host or virtual machine
 
-### 3. Configuration & Secrets Setup
-1. Duplicate the example environment file:
-   ```bash
+### Configure the Project
+
+1. Create the local environment file from the example:
+
+   ```sh
    cp srcs/.env.example srcs/.env
    ```
-2. Create the `secrets/` directory at the repository root and populate the secret files:
-   ```bash
+
+   Edit `srcs/.env`. Set `DOMAIN_NAME` to your chosen domain, and update the WordPress title and email addresses as needed. The example uses `login.42.fr`; replace `login` with your own login.
+
+2. Create the repository-root `secrets/` directory and add the required password files. The filenames must match these entries:
+
+   ```sh
    mkdir -p secrets
-   echo "super_mariadb_root_pass" > secrets/db_root_password.txt
-   echo "mariadb_user_pass"       > secrets/db_password.txt
-   echo "wp_super_admin_pass"     > secrets/wp_admin_password.txt
-   echo "wp_regular_user_pass"    > secrets/wp_user_password.txt
-   echo "ftp_user_pass"           > secrets/ftp_password.txt
+   ```
+
+   ```text
+   db_root_password.txt
+   db_password.txt
+   wp_admin_password.txt
+   wp_user_password.txt
+   ftp_password.txt
+   ```
+
+   Put one password in each file and restrict access:
+
+   ```sh
    chmod 600 secrets/*.txt
    ```
 
-### 4. Build and Execution Commands
-Run the stack using the root `Makefile`:
-```bash
-make          # Builds images and launches all services in the background
-make status   # Displays the status of running containers
-make logs     # Follows aggregate container logs
-make down     # Stops and removes all containers
-make clean    # Removes stopped containers and networks
-make fclean   # Deep cleanup: removes containers, networks, images, volumes, and host data
-make re       # Performs fclean and rebuilds the stack
+3. Add your chosen domain to the host's `/etc/hosts` file. For the example domain:
+
+   ```text
+   127.0.0.1 login.42.fr
+   ```
+
+   Replace `login.42.fr` with the value of `DOMAIN_NAME` in `srcs/.env`. This project uses a self-signed TLS certificate, so browsers will show a certificate warning.
+
+4. The Makefile stores persistent files in `/home/aarid/data`. If your Linux username differs, update `LOGIN` in the Makefile before starting the stack.
+
+### Build and Run
+
+Run commands from the repository root:
+
+```sh
+make          # Build images and start the stack
+make status   # Show container status
+make logs     # Follow logs from all services
+make stop     # Stop containers without removing them
+make start    # Start stopped containers
+make down     # Remove containers and the project network; keep host data
 ```
 
-### 5. Accessing the Services
-- **WordPress Website**: `https://aarid.42.fr`
-- **WordPress Admin Panel**: `https://aarid.42.fr/wp-admin`
-  - Username: `site_boss` (or value set in `WP_ADMIN_USER`)
-  - Password: as specified in `secrets/wp_admin_password.txt`
-- **Static Portfolio**: `https://aarid.42.fr/portfolio/`
-- **Adminer Database Manager**: `https://aarid.42.fr/adminer`
-  - System: `MySQL` / `MariaDB`
-  - Server: `mariadb`
-  - Username: `wp_user`
-  - Password: as specified in `secrets/db_password.txt`
-  - Database: `wordpress`
-- **cAdvisor Metrics Dashboard**: `https://aarid.42.fr/cadvisor/`
-- **FTP Server**: Connect via FTP client (e.g. `ftp -p aarid.42.fr 21` or FileZilla):
-  - Host: `aarid.42.fr`
-  - Port: `21`
-  - Username: `ftpuser`
-  - Password: as specified in `secrets/ftp_password.txt`
+`make clean` runs `make down`. **Destructive:** `make fclean` prunes unused Docker resources and deletes `/home/aarid/data`, including the persistent MariaDB and WordPress files. `make re` runs `fclean` before rebuilding, so it also deletes that data. Back up anything important before using either target.
+
+### Access the Services
+
+Use the domain configured in `srcs/.env`:
+
+- WordPress: `https://login.42.fr/`
+- WordPress administration: `https://login.42.fr/wp-admin/`
+- Static portfolio: `https://login.42.fr/portfolio/`
+- Adminer: `https://login.42.fr/adminer/` (server: `mariadb`; database: `wordpress`; credentials are in the database secret files)
+- cAdvisor: `https://login.42.fr/cadvisor/`
+- FTP: connect to `login.42.fr` on port `21` with the username in `FTP_USER` and password in `secrets/ftp_password.txt`; passive ports `21100-21105` must also be reachable.
+
+The example WordPress administrator username is `site_boss`; its password is in `secrets/wp_admin_password.txt`. The regular WordPress user defaults to `evaluator`; its password is in `secrets/wp_user_password.txt`. Change these usernames and emails in `srcs/.env` before the first installation if desired.
 
 ---
 
 ## Resources
 
 ### References
+
 - [Docker Documentation: Compose file specification](https://docs.docker.com/compose/compose-file/)
-- [Docker Documentation: Manage sensitive data with Docker secrets](https://docs.docker.com/engine/swarm/secrets/)
+- [Docker Documentation: Compose secrets](https://docs.docker.com/compose/how-tos/use-secrets/)
+- [Docker Documentation: Volumes](https://docs.docker.com/engine/storage/volumes/)
+- [Docker Documentation: Bridge networks](https://docs.docker.com/engine/network/drivers/bridge/)
 - [NGINX Documentation: Configuring HTTPS servers](https://nginx.org/en/docs/http/configuring_https_servers.html)
-- [MariaDB Knowledge Base: Starting and stopping MariaDB](https://mariadb.com/kb/en/starting-and-stopping-mariadb-automatically/)
+- [MariaDB Documentation](https://mariadb.com/docs/server/)
 - [WP-CLI Handbook: Command line interface for WordPress](https://make.wordpress.org/cli/handbook/)
 - [PHP-FPM Documentation: FastCGI Process Manager](https://www.php.net/manual/en/install.fpm.php)
 - [Redis Documentation](https://redis.io/documentation)
@@ -161,6 +177,11 @@ make re       # Performs fclean and rebuilds the stack
 - [Google cAdvisor GitHub](https://github.com/google/cadvisor)
 
 ### AI Usage Disclosure
-In accordance with the 42 AI Instructions:
-- **Tasks and Parts**: AI assistance was utilized to audit configuration compliance against the Inception v5.4 subject specifications, structure documentation (`README.md`, `USER_DOC.md`, `DEV_DOC.md`), and draft automated WP-CLI installation scripts, Redis cache integration, and vsftpd FTP setup.
-- **Verification**: All generated Dockerfiles, configurations, and bash entrypoint scripts were systematically reviewed to ensure Debian Bookworm compatibility, valid shell shebangs, correct FastCGI proxy headers, and strict adherence to PID 1 signal handling without using banned loop workarounds (`tail -f`, `sleep infinity`).
+
+AI assistance was used during development to:
+
+- Debug service startup and routing problems, including MariaDB initialization and the resulting WordPress/Nginx behavior.
+- Explain some weird configuration and choices
+- Draft, clarify, and review Markdown documentation in `README.md`, `DEV_DOC.md`, and `USER_DOC.md`.
+
+The project author is still the one responsible for reviewing and testing the resulting configuration.

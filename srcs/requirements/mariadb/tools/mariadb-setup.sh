@@ -21,10 +21,10 @@ if [ ! -d "/var/lib/mysql/mysql" ]; then
 
     # Own the database folder by the mysql user
     chown -R mysql:mysql /var/lib/mysql
+fi
 
-    # Configure administrative and normal users safely using secrets + env vars
-    echo "Creating database and initial users..."
-    mariadbd --user=mysql --bootstrap << EOF
+echo "Creating database and initial users..."
+mariadbd --user=mysql --bootstrap << EOF
 FLUSH PRIVILEGES;
 ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';
 CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\`;
@@ -32,8 +32,7 @@ CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'%' IDENTIFIED BY '${MYSQL_PASSWORD}';
 GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.* TO '${MYSQL_USER}'@'%';
 FLUSH PRIVILEGES;
 EOF
-    echo "MariaDB system tables and users initialized."
-fi
+echo "MariaDB system tables and users initialized."
 
 # Replace active shell with the daemon process as PID 1
 echo "Launching MariaDB daemon in foreground..."

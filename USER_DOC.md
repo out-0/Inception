@@ -54,10 +54,11 @@ make down
 ## 3. Accessing the Website and Administration Panel
 
 ### Domain Configuration
-Before accessing the site, verify that the domain name points to your local machine. In `/etc/hosts`:
+The examples below use `aarid.42.fr`. Use the value of `DOMAIN_NAME` in `srcs/.env` instead, and make sure that domain points to your local machine. Add it to `/etc/hosts`:
 ```text
 127.0.0.1 aarid.42.fr
 ```
+Replace `aarid.42.fr` with your configured domain. The site uses a self-signed TLS certificate, so your browser may show a certificate warning.
 
 ### Access URLs
 | Service | URL / Port | Description |
@@ -90,7 +91,7 @@ Before accessing the site, verify that the domain name points to your local mach
 
 ## 4. Locating and Managing Credentials
 
-All sensitive credentials and passwords are decoupled from configuration files and stored securely inside the `secrets/` directory at the project root:
+Passwords are kept in separate files in the repository-root `secrets/` directory and mounted into the containers that need them. These are host files, not encrypted storage. Restrict access to them and do not share or commit them:
 
 | Credential | File Location | Used By |
 | :--- | :--- | :--- |
@@ -110,7 +111,7 @@ chmod 600 secrets/*.txt
 
 ## 5. Checking that Services Are Running Correctly
 
-### Checking Container Health and Status
+### Checking Container Status
 Run the status command:
 ```bash
 make status
@@ -127,7 +128,7 @@ adminer       adminer:42        "php -S 0.0.0.0:8080…"   adminer       Up
 cadvisor      cadvisor:42       "/usr/local/bin/cadv…"   cadvisor      Up
 nginx         nginx:42          "/usr/local/bin/entr…"   nginx         Up
 ```
-Verify that all 8 services report status `Up`.
+Confirm that all eight expected services are listed and report status `Up`. This checks whether the containers are running; the Compose configuration does not define health checks, so `Up` alone does not verify that every service is responding correctly.
 
 ### Inspecting Live Logs
 To monitor real-time activity:

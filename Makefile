@@ -45,10 +45,7 @@ clean: down
 fclean: down
 	@echo "Performing deep cleanup (volumes, images, and data directories)..."
 	@docker system prune -af --volumes || true
-	@if [ -d "$(DATA_DIR)" ]; then \
-		echo "Removing $(DATA_DIR)..."; \
-		rm -rf $(DATA_DIR) || sudo rm -rf $(DATA_DIR) || true; \
-	fi
+	@sudo rm -rf $(DATA_DIR)
 
 re: fclean all
 
