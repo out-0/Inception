@@ -56,7 +56,6 @@ if [ ! -f "/var/www/html/wp-config.php" ]; then
     echo "Configuring Redis object cache..."
     wp config set WP_REDIS_HOST redis --allow-root --path=/var/www/html
     wp config set WP_REDIS_PORT 6379 --raw --allow-root --path=/var/www/html
-    wp config set WP_CACHE true --raw --allow-root --path=/var/www/html
     wp plugin install redis-cache --activate --allow-root --path=/var/www/html
     wp redis enable --allow-root --path=/var/www/html || true
 
