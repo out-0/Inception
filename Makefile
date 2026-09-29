@@ -1,5 +1,3 @@
-# TODO: ALLOW COMMENTS without approve AND USER REGISTERS IN WORDPRESS WEBSITE LATER
-
 LOGIN       := aarid
 DATA_DIR    := /home/$(LOGIN)/data
 COMPOSE     := docker compose -f srcs/docker-compose.yml

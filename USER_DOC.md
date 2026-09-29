@@ -9,11 +9,13 @@ This guide provides end users and administrators with simple, clear instructions
 The infrastructure provides eight dedicated services:
 
 ### Mandatory Services
+
 - **NGINX Web Gateway**: An encrypted reverse proxy operating over HTTPS (port 443 with TLSv1.2/TLSv1.3). It routes incoming requests to WordPress and serves static media assets.
 - **WordPress Application (PHP-FPM)**: Powers the website and content management system, processing dynamic PHP requests on port 9000.
 - **MariaDB Database**: Stores website data, users, blog posts, configurations, and taxonomy tables on internal port 3306.
 
 ### Bonus Services
+
 - **Redis Cache**: In-memory caching layer accelerating WordPress database query performance.
 - **FTP Server (`vsftpd`)**: Remote file management service pointing directly to the WordPress installation directory (`/var/www/html`).
 - **Static Website (Portfolio)**: Showcase resume web application for `aarid` built without PHP using HTML5/CSS3/Node.js.
@@ -27,24 +29,31 @@ The infrastructure provides eight dedicated services:
 All stack operations are controlled through the `Makefile` at the repository root.
 
 ### Starting the Stack
+
 To build and launch all containers in detached mode:
+
 ```bash
 make
 ```
-*(or `make bonus` / `make up`)*
+
+_(or `make bonus` / `make up`)_
 
 ### Stopping the Stack
+
 To temporarily halt container execution without removing them:
+
 ```bash
 make stop
 ```
 
 To resume stopped containers:
+
 ```bash
 make start
 ```
 
 To stop and remove containers and networks while preserving database data:
+
 ```bash
 make down
 ```
@@ -54,23 +63,28 @@ make down
 ## 3. Accessing the Website and Administration Panel
 
 ### Domain Configuration
+
 The examples below use `aarid.42.fr`. Use the value of `DOMAIN_NAME` in `srcs/.env` instead, and make sure that domain points to your local machine. Add it to `/etc/hosts`:
+
 ```text
 127.0.0.1 aarid.42.fr
 ```
+
 Replace `aarid.42.fr` with your configured domain. The site uses a self-signed TLS certificate, so your browser may show a certificate warning.
 
 ### Access URLs
-| Service | URL / Port | Description |
-| :--- | :--- | :--- |
-| **WordPress Website** | `https://aarid.42.fr` | Main dynamic website |
-| **WordPress Admin Panel** | `https://aarid.42.fr/wp-admin` | Administrative dashboard |
-| **Static Portfolio** | `https://aarid.42.fr/portfolio/` | Static developer showcase |
-| **Adminer** | `https://aarid.42.fr/adminer` | MariaDB web management |
-| **cAdvisor** | `https://aarid.42.fr/cadvisor/` | Real-time container metrics |
-| **FTP Server** | `aarid.42.fr:21` (passive `21100-21105`) | Remote file transfer |
+
+| Service                   | URL / Port                               | Description                 |
+| :------------------------ | :--------------------------------------- | :-------------------------- |
+| **WordPress Website**     | `https://aarid.42.fr`                    | Main dynamic website        |
+| **WordPress Admin Panel** | `https://aarid.42.fr/wp-admin`           | Administrative dashboard    |
+| **Static Portfolio**      | `https://aarid.42.fr/portfolio/`         | Static developer showcase   |
+| **Adminer**               | `https://aarid.42.fr/adminer`            | MariaDB web management      |
+| **cAdvisor**              | `https://aarid.42.fr/cadvisor/`          | Real-time container metrics |
+| **FTP Server**            | `aarid.42.fr:21` (passive `21100-21105`) | Remote file transfer        |
 
 ### Default Accounts
+
 - **WordPress Administrator**:
   - **Username**: `site_boss` (configured via `srcs/.env`)
   - **Password**: Found in `secrets/wp_admin_password.txt`
@@ -93,16 +107,18 @@ Replace `aarid.42.fr` with your configured domain. The site uses a self-signed T
 
 Passwords are kept in separate files in the repository-root `secrets/` directory and mounted into the containers that need them. These are host files, not encrypted storage. Restrict access to them and do not share or commit them:
 
-| Credential | File Location | Used By |
-| :--- | :--- | :--- |
-| **Database Root Password** | `secrets/db_root_password.txt` | MariaDB |
-| **Database User Password** | `secrets/db_password.txt` | MariaDB, WordPress |
+| Credential                   | File Location                   | Used By                 |
+| :--------------------------- | :------------------------------ | :---------------------- |
+| **Database Root Password**   | `secrets/db_root_password.txt`  | MariaDB                 |
+| **Database User Password**   | `secrets/db_password.txt`       | MariaDB, WordPress      |
 | **WordPress Admin Password** | `secrets/wp_admin_password.txt` | WordPress initial setup |
-| **WordPress User Password** | `secrets/wp_user_password.txt` | WordPress initial setup |
-| **FTP User Password** | `secrets/ftp_password.txt` | vsftpd FTP server |
+| **WordPress User Password**  | `secrets/wp_user_password.txt`  | WordPress initial setup |
+| **FTP User Password**        | `secrets/ftp_password.txt`      | vsftpd FTP server       |
 
 ### Changing Passwords
+
 To change initial passwords prior to first deployment, edit the corresponding `.txt` file inside `secrets/` and update permissions:
+
 ```bash
 chmod 600 secrets/*.txt
 ```
@@ -112,11 +128,15 @@ chmod 600 secrets/*.txt
 ## 5. Checking that Services Are Running Correctly
 
 ### Checking Container Status
+
 Run the status command:
+
 ```bash
 make status
 ```
+
 Output will list all running containers:
+
 ```text
 NAME          IMAGE             COMMAND                  SERVICE       STATUS
 mariadb       mariadb:42        "/usr/local/bin/mari…"   mariadb       Up
@@ -128,14 +148,19 @@ adminer       adminer:42        "php -S 0.0.0.0:8080…"   adminer       Up
 cadvisor      cadvisor:42       "/usr/local/bin/cadv…"   cadvisor      Up
 nginx         nginx:42          "/usr/local/bin/entr…"   nginx         Up
 ```
+
 Confirm that all eight expected services are listed and report status `Up`. This checks whether the containers are running; the Compose configuration does not define health checks, so `Up` alone does not verify that every service is responding correctly.
 
 ### Inspecting Live Logs
+
 To monitor real-time activity:
+
 ```bash
 make logs
 ```
+
 To view logs for a single service:
+
 ```bash
 docker compose -f srcs/docker-compose.yml logs -f nginx
 docker compose -f srcs/docker-compose.yml logs -f wordpress
@@ -146,21 +171,28 @@ docker compose -f srcs/docker-compose.yml logs -f cadvisor
 ```
 
 ### Checking Network Connectivity and SSL
+
 Verify that NGINX answers over HTTPS with TLSv1.2 or TLSv1.3:
+
 ```bash
 curl -kI https://aarid.42.fr
 ```
 
 ### Checking Redis Cache
+
 In the container:
+
 ```bash
 docker compose -f srcs/docker-compose.yml exec redis redis-cli ping
 # Output: PONG
 ```
+
 Or check the WordPress admin dashboard under **Settings > Redis** to confirm Redis Object Cache is enabled.
 
 ### Testing FTP
+
 Connect with any FTP client:
+
 ```bash
 ftp -p aarid.42.fr 21
 # Enter username 'ftpuser' and password from secrets/ftp_password.txt
