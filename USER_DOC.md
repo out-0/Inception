@@ -187,6 +187,13 @@ docker compose -f srcs/docker-compose.yml exec redis redis-cli ping
 # Output: PONG
 ```
 
+Or
+
+```bash
+❯ docker compose -f srcs/docker-compose.yml exec wordpress wp --allow-root redis status
+# Status: Connected
+```
+
 Or check the WordPress admin dashboard under **Settings > Redis** to confirm Redis Object Cache is enabled.
 
 ### Testing FTP
@@ -196,4 +203,26 @@ Connect with any FTP client:
 ```bash
 ftp -p aarid.42.fr 21
 # Enter username 'ftpuser' and password from secrets/ftp_password.txt
+```
+
+### Testing mariadb
+
+Attach to the mariadb container:
+
+```bash
+
+❯ docker exec -it mariadb bash
+root@04cae0bf39e6:/# mariadb -u wp_user -p
+Enter password:
+```
+
+Then check:
+
+```bash
+SHOW DATABASES;
+USE wordpress;
+SHOW TABLES;
+SELECT * FROM wp_users;
+SELECT ID, user_nickname FROM wp_users;
+SELECT ID, post_title FROM wp_posts;
 ```
